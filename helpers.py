@@ -94,7 +94,9 @@ def retrieve_url(url):
     except Exception:
         pass
     dat = dat.decode(charset, 'replace')
-    dat = htmlentitydecode(dat)
+    # use htmlentitydecode to convert html entities to normal characters, ONLY IF content-type is not xml
+    if 'xml' not in info['Content-Type']:
+        dat = htmlentitydecode(dat)
     # return dat.encode('utf-8', 'replace')
     return dat
 
