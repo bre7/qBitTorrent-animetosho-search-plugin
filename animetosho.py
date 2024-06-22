@@ -15,16 +15,17 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from html.parser import HTMLParser
+from xml.dom.minidom import parseString
 from helpers import download_file, retrieve_url
 from novaprinter import prettyPrinter
-
+import traceback
+import sys
 
 class animetosho(object):
     url = "https://animetosho.org"
     name = "Anime Tosho"
     supported_categories = {
-        "all": [""]
+        "anime": [""],
     }
 
     def __init__(self):
@@ -33,94 +34,51 @@ class animetosho(object):
     def download_torrent(self, info):
         print(download_file(info))
 
-    def search(self, what, cat='all'):
-        results = []
-        for page in range(1, 10):
-            url = f"https://animetosho.org/search?q={what}&page={page}"
-            try:
-                data = retrieve_url(url)
-                parser = self.DataExtractor()
-                parser.feed(data)
-                results = parser.get_results()
-                parser.close()
-                if len(results) == 0:
-                    break
-            except Exception:
-                break
-            for result in results[::-1]:
-                prettyPrinter(result)
+    def search(self, what, cat='anime'):
+        url = f"https://feed.animetosho.org/api?q={what}"
+        data = retrieve_url(url)
+        parser = self.DataExtractor()
+        parser.feed(data)
+        results = parser.get_results()
+        for result in results:
+            prettyPrinter(result)
 
-    class DataExtractor(HTMLParser):
+    class DataExtractor():
         def __init__(self):
             super().__init__()
-            self.in_corret_tag = False
-            self.found_size = False
-            self.found_name = False
-            self.save_name_data = False
-            self.look_for_magnet = False
-            self.look_for_seeds = False
             self.results = []
             self.current_result = {"engine_url": "https://animetosho.org/"}
 
-        def handle_starttag(self, tag, attrs):
-            for attr in attrs:
-                attribute = attr[0]
-                attribute_values = attr[1].split()
-                if attribute == 'class' and "home_list_entry" in attribute_values\
-                        and "home_list_entry_compl_1" in attribute_values:
-                    self.in_corret_tag = True
+        def feed(self, data):
+            try:
+                document = parseString(data)
+                # print("results: ", len(document.getElementsByTagName("item")))
 
-                if self.in_corret_tag:
-                    if attribute == 'class' and "size" in attribute_values:
-                        self.found_size = True
+                for item in document.getElementsByTagName("item"):
+                    self.current_result["name"] = item.getElementsByTagName("title")[0].firstChild.nodeValue
+                    self.current_result["desc_link"] = item.getElementsByTagName("link")[0].firstChild.nodeValue
+                    self.current_result["seeds"] = "0"
+                    self.current_result["leech"] = "0"
 
-                    if self.found_size:
-                        if attribute == 'title':
-                            size = attribute_values[3].replace(",", "")
-                            self.current_result["size"] = size
-                            self.found_size = False
-
-                    if attribute == 'class' and "link" in attribute_values:
-                        self.found_name = True
-
-                    if self.found_name:
-                        if tag == "a":
-                            description = attribute_values[0]
-                            self.current_result["desc_link"] = description
-                            self.save_name_data = True
-                            self.found_name = False
-
-                    if attribute == 'class' and "links" in attribute_values:
-                        self.look_for_magnet = True
-                        self.look_for_seeds = True
-
-                    if self.look_for_magnet:
-                        if tag == "a":
-                            if attribute_values[0].startswith("magnet:?xt"):
-                                self.current_result["link"] = attribute_values[0]
-                                self.look_for_magnet = False
-
-                    if self.look_for_seeds:
-                        if tag == "span":
-                            if attribute == "title":
-                                seeds, leech = attr[1].split("/")
-                                seeds = seeds.split(": ")[1].strip()
-                                leech = leech.split(": ")[1].strip()
-                                self.current_result["seeds"] = seeds
-                                self.current_result["leech"] = leech
-
+                    for child in item.childNodes:
+                        if child.nodeName == "newznab:attr":
+                            if child.getAttribute("name") == "size":
+                                self.current_result["size"] = child.getAttribute("value")
+                        if child.nodeName == "torznab:attr":
+                            if child.getAttribute("name") == "magneturl":
+                                self.current_result["link"] = child.getAttribute("value")
+                            if child.getAttribute("name") == "seeders":
+                                self.current_result["seeds"] = child.getAttribute("value")
+                            if child.getAttribute("name") == "leechers":
+                                self.current_result["leech"] = child.getAttribute("value")
                     self.check_current_result_completed()
-
-        def handle_data(self, data):
-            if self.save_name_data:
-                self.current_result["name"] = data
-                self.save_name_data = False
+            except Exception as e:
+                print(e, traceback.format_exc(), file=sys.stderr)
 
         def check_current_result_completed(self):
             if len(self.current_result) == 7:
                 self.results.append(self.current_result)
                 self.current_result = {"engine_url": "https://animetosho.org/"}
-                self.in_corret_tag = False
 
         def get_results(self):
             return self.results
