@@ -24,7 +24,8 @@ class animetosho(object):
     url = "https://animetosho.org"
     name = "Anime Tosho"
     supported_categories = {
-        "all": [""]
+        "all": [""],
+        "anime: [""]
     }
 
     def __init__(self):
