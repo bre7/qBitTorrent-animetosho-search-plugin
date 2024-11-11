@@ -25,7 +25,7 @@ class animetosho(object):
     name = "Anime Tosho"
     supported_categories = {
         "all": [""],
-        "anime: [""]
+        "anime": [""]
     }
 
     def __init__(self):
